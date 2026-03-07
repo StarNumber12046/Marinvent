@@ -1,0 +1,159 @@
+basePath: /
+definitions:
+  internal_api.ChartInfo:
+    properties:
+      category:
+        type: string
+      chart_type:
+        type: string
+      date_eff:
+        type: string
+      filename:
+        type: string
+      has_tcl:
+        type: boolean
+      icao:
+        type: string
+      proc_id:
+        type: string
+      sheet_id:
+        type: string
+      type_name:
+        type: string
+    type: object
+  internal_api.ChartList:
+    description: Response containing list of charts for an ICAO
+    properties:
+      charts:
+        items:
+          $ref: '#/definitions/internal_api.ChartInfo'
+        type: array
+      icao:
+        type: string
+      total:
+        type: integer
+    type: object
+  internal_api.ChartType:
+    properties:
+      category:
+        type: string
+      code:
+        type: string
+      type:
+        type: string
+    type: object
+  internal_api.ChartTypesResponse:
+    properties:
+      total:
+        type: integer
+      types:
+        items:
+          $ref: '#/definitions/internal_api.ChartType'
+        type: array
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@marinvent.local
+    name: API Support
+    url: https://github.com/marinvent/marivent
+  description: API for accessing and exporting Jeppesen terminal charts
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Marinvent Chart API
+  version: "1.0"
+paths:
+  /api/v1/chart-types:
+    get:
+      consumes:
+      - application/json
+      description: Returns all available chart types from ctypes.dbf with codes, categories,
+        and descriptions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api.ChartTypesResponse'
+      summary: List all chart types
+      tags:
+      - charts
+  /api/v1/charts/{icao}:
+    get:
+      consumes:
+      - application/json
+      description: Returns all charts for a given ICAO airport. Can be filtered by
+        type (code or name) and search query.
+      parameters:
+      - description: ICAO airport code (e.g., KJFK, EGLL)
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart type - can be code (1L, AP) or name (RNAV, ILS, AIRPORT).
+          Looks up in ctypes.dbf
+        in: query
+        name: type
+        type: string
+      - description: Search text to filter by PROC_ID (procedure name)
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api.ChartList'
+      summary: List charts for ICAO
+      tags:
+      - charts
+  /api/v1/charts/{icao}/export/{filename}:
+    get:
+      consumes:
+      - application/json
+      description: Exports a specific chart to PDF format. Returns the chart as a
+        PDF file.
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename (e.g., KJFK225)
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: PDF file containing the chart
+          schema:
+            type: file
+      summary: Export chart to PDF
+      tags:
+      - charts
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Returns API health status and version
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+swagger: "2.0"

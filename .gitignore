@@ -1,0 +1,37 @@
+# Binaries (compiled executables)
+*.exe
+*.obj
+
+# Dependencies (DLLs)
+*.dll
+
+# Jeppesen data files
+*.tfl
+*.tls
+*.tcl
+jeppesen.tfl
+jeppesen.tls
+lssdef.tcl
+
+# Test outputs
+test*.pdf
+test*.emf
+
+# IDE
+.ruff_cache/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Data directories
+TCLs/
+Extra/
+LIRZ103/
+
+# Config files that shouldn't be committed
+nul
+opencode.json
+test_tcl_api.py
