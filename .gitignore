@@ -35,3 +35,10 @@ LIRZ103/
 nul
 opencode.json
 test_tcl_api.py
+
+# Ghidra docs
+GHYDRA.md
+GHYDRA_HTTP.md
+
+# Debug scripts
+debug.bat
