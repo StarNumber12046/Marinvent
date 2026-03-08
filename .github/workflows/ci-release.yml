@@ -56,10 +56,6 @@ jobs:
       - name: Build tcl2emf (Windows)
         run: |
           cl.exe /EHsc /MD tcl2emf.cpp /Fe:tcl2emf.exe gdi32.lib user32.lib winspool.lib
-          if not exist tcl2emf.exe (
-            echo Build failed!
-            exit /b 1
-          )
 
       # Copy Python script
       - name: Prepare Python Script
