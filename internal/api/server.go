@@ -23,6 +23,7 @@ import (
 	"marinvent/internal/charts"
 	"marinvent/internal/dbf"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -64,6 +65,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(cors.Default())
 	router.Use(gin.Logger())
 
 	handler := NewHandler(catalog, &Config{
