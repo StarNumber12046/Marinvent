@@ -45,3 +45,4 @@ debug.bat
 
 *.pdf
 *.bak
+**/__pycache__

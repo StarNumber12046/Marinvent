@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type ChartInfo struct {
@@ -24,6 +25,7 @@ type Catalog struct {
 	db         *dbf.DBF
 	tclDir     string
 	chartCache map[string]*ChartInfo
+	mu         sync.RWMutex
 }
 
 func NewCatalog(dbf *dbf.DBF, tclDir string) *Catalog {
@@ -35,6 +37,13 @@ func NewCatalog(dbf *dbf.DBF, tclDir string) *Catalog {
 }
 
 func (c *Catalog) buildCache() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.chartCache) > 0 {
+		return
+	}
+
 	available := c.getAvailableTCLs()
 	allCharts := c.db.GetAllCharts()
 	for _, chart := range allCharts {
@@ -99,16 +108,24 @@ func (c *Catalog) getAvailableTCLs() map[string]string {
 }
 
 func (c *Catalog) GetChart(filename string) *ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	return c.chartCache[filename]
 }
 
 func (c *Catalog) GetAllCharts() []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	charts := make([]*ChartInfo, 0, len(c.chartCache))
 	for _, info := range c.chartCache {
 		charts = append(charts, info)
@@ -117,9 +134,13 @@ func (c *Catalog) GetAllCharts() []*ChartInfo {
 }
 
 func (c *Catalog) Search(query string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	query = strings.ToUpper(query)
 	var results []*ChartInfo
 	for _, info := range c.chartCache {
@@ -134,9 +155,13 @@ func (c *Catalog) Search(query string) []*ChartInfo {
 }
 
 func (c *Catalog) FilterByICAO(icao string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	icao = strings.ToUpper(icao)
 	var results []*ChartInfo
 	for _, info := range c.chartCache {
@@ -148,9 +173,13 @@ func (c *Catalog) FilterByICAO(icao string) []*ChartInfo {
 }
 
 func (c *Catalog) FilterByCategory(category string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	category = strings.ToUpper(category)
 	var results []*ChartInfo
 	for _, info := range c.chartCache {
@@ -162,9 +191,13 @@ func (c *Catalog) FilterByCategory(category string) []*ChartInfo {
 }
 
 func (c *Catalog) FilterByChartType(chartType string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	var results []*ChartInfo
 	for _, info := range c.chartCache {
 		if info.ChartType == chartType {
@@ -175,9 +208,13 @@ func (c *Catalog) FilterByChartType(chartType string) []*ChartInfo {
 }
 
 func (c *Catalog) FilterByTypeName(typeName string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 
 	codes := c.db.ResolveChartTypes(typeName)
 	if len(codes) == 0 {
@@ -199,9 +236,13 @@ func (c *Catalog) FilterByTypeName(typeName string) []*ChartInfo {
 }
 
 func (c *Catalog) Filter(icao, typeName, search string) []*ChartInfo {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 
 	var candidates []*ChartInfo
 
@@ -256,9 +297,13 @@ func (c *Catalog) Filter(icao, typeName, search string) []*ChartInfo {
 }
 
 func (c *Catalog) NumCharts() int {
+	c.mu.RLock()
 	if len(c.chartCache) == 0 {
+		c.mu.RUnlock()
 		c.buildCache()
+		c.mu.RLock()
 	}
+	defer c.mu.RUnlock()
 	return len(c.chartCache)
 }
 

@@ -71,6 +71,9 @@ static HMODULE TryLoadLibrary(const char* name) {
     hMod = LoadLibraryA(path);
     if (hMod) return hMod;
     
+    DWORD err = GetLastError();
+    fprintf(stderr, "  Tried: %s (error %lu)\n", name, err);
+    fprintf(stderr, "  Tried: %s (error %lu)\n", path, err);
     return NULL;
 }
 
@@ -78,6 +81,7 @@ static int LoadDLLs(void) {
     hMrvDrv = TryLoadLibrary("mrvdrv.dll");
     if (!hMrvDrv) {
         fprintf(stderr, "Failed to load mrvdrv.dll (not found locally or in " JEPPVIEW_PATH ")\n");
+        fprintf(stderr, "Make sure DLLs and their dependencies are in PATH or the executable directory\n");
         return 0;
     }
     
