@@ -35,6 +35,8 @@ jobs:
       # Windows-specific: Set up MSVC for tcl2emf.cpp
       - name: Set up MSVC (Windows)
         uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
 
       # Build server
       - name: Build Server
@@ -56,7 +58,6 @@ jobs:
       - name: Build tcl2emf (Windows)
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat"
           cl.exe /EHsc /MD tcl2emf.cpp /Fe:tcl2emf.exe gdi32.lib user32.lib winspool.lib
 
       # Create platform-specific artifact package
