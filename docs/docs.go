@@ -9,16 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "url": "https://github.com/marinvent/marivent",
-            "email": "support@marinvent.local"
-        },
-        "license": {
-            "name": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -111,6 +102,12 @@ const docTemplate = `{
                         "description": "Search text to filter by PROC_ID (procedure name)",
                         "name": "search",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart types to include - can be 'vfr', 'ifr', or 'vfr,ifr' (default: both)",
+                        "name": "types",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -163,6 +160,237 @@ const docTemplate = `{
                         "description": "PDF file containing the chart",
                         "schema": {
                             "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/charts/{icao}/geo/batch-coord2pixel/{filename}": {
+            "post": {
+                "description": "Converts multiple geographic coordinates to pixel coordinates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "georef"
+                ],
+                "summary": "Batch convert coordinates to pixels",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Geographic coordinates",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.BatchCoordToPixelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.BatchCoordToPixelResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/charts/{icao}/geo/batch-pixel2coord/{filename}": {
+            "post": {
+                "description": "Converts multiple pixel coordinates to geographic coordinates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "georef"
+                ],
+                "summary": "Batch convert pixels to coordinates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Pixel coordinates",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.BatchPixelToCoordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.BatchPixelToCoordResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/charts/{icao}/geo/coord2pixel/{filename}": {
+            "post": {
+                "description": "Converts geographic coordinates (lat, lon) to chart pixel coordinates (x, y)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "georef"
+                ],
+                "summary": "Convert coordinates to pixel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Geographic coordinates",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.CoordToPixelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.CoordToPixelResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/charts/{icao}/geo/pixel2coord/{filename}": {
+            "post": {
+                "description": "Converts chart pixel coordinates (x, y) to geographic coordinates (lat, lon)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "georef"
+                ],
+                "summary": "Convert pixel to coordinates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Pixel coordinates",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.PixelToCoordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.PixelToCoordResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/charts/{icao}/geo/status/{filename}": {
+            "get": {
+                "description": "Returns whether a chart is georeferenced and its pixel bounds",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "georef"
+                ],
+                "summary": "Get chart georeferencing status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename (e.g., KJFK225)",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mrvtcl.GeoRefStatus"
                         }
                     }
                 }
@@ -285,6 +513,9 @@ const docTemplate = `{
                 "icao": {
                     "type": "string"
                 },
+                "is_vfr": {
+                    "type": "boolean"
+                },
                 "proc_id": {
                     "type": "string"
                 },
@@ -341,18 +572,152 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "mrvtcl.BatchCoordToPixelRequest": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mrvtcl.CoordToPixelRequest"
+                    }
+                }
+            }
+        },
+        "mrvtcl.BatchCoordToPixelResponse": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mrvtcl.CoordToPixelResponse"
+                    }
+                }
+            }
+        },
+        "mrvtcl.BatchPixelToCoordRequest": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mrvtcl.PixelToCoordRequest"
+                    }
+                }
+            }
+        },
+        "mrvtcl.BatchPixelToCoordResponse": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mrvtcl.PixelToCoordResponse"
+                    }
+                }
+            }
+        },
+        "mrvtcl.ChartBounds": {
+            "type": "object",
+            "properties": {
+                "bottom": {
+                    "type": "integer",
+                    "format": "int32"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "int32"
+                },
+                "left": {
+                    "type": "integer",
+                    "format": "int32"
+                },
+                "right": {
+                    "type": "integer",
+                    "format": "int32"
+                },
+                "top": {
+                    "type": "integer",
+                    "format": "int32"
+                },
+                "width": {
+                    "type": "integer",
+                    "format": "int32"
+                }
+            }
+        },
+        "mrvtcl.CoordToPixelRequest": {
+            "type": "object",
+            "properties": {
+                "latitude": {
+                    "type": "number"
+                },
+                "longitude": {
+                    "type": "number"
+                }
+            }
+        },
+        "mrvtcl.CoordToPixelResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mrvtcl.GeoRefStatus": {
+            "type": "object",
+            "properties": {
+                "bounds": {
+                    "$ref": "#/definitions/mrvtcl.ChartBounds"
+                },
+                "georeferenced": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "mrvtcl.PixelToCoordRequest": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mrvtcl.PixelToCoordResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "latitude": {
+                    "type": "number"
+                },
+                "longitude": {
+                    "type": "number"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
-	Host:             "localhost:8080",
-	BasePath:         "/",
+	Version:          "",
+	Host:             "",
+	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "Marinvent Chart API",
-	Description:      "API for accessing and exporting Jeppesen terminal charts",
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

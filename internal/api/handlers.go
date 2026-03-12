@@ -307,7 +307,7 @@ func logTimings(timings map[string]time.Duration, filename string) {
 func (h *Handler) GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":     "ok",
-		"version":    "2.0.0",
+		"version":    "2.1.0",
 		"dll_loaded": mrvtcl.IsLoaded(),
 		"dll_init":   mrvtcl.IsInitialized(),
 	})

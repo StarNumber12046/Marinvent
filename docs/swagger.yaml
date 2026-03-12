@@ -1,4 +1,3 @@
-basePath: /
 definitions:
   api.Airport:
     properties:
@@ -59,6 +58,8 @@ definitions:
         type: boolean
       icao:
         type: string
+      is_vfr:
+        type: boolean
       proc_id:
         type: string
       sheet_id:
@@ -96,19 +97,96 @@ definitions:
           $ref: '#/definitions/api.ChartType'
         type: array
     type: object
-host: localhost:8080
+  mrvtcl.BatchCoordToPixelRequest:
+    properties:
+      points:
+        items:
+          $ref: '#/definitions/mrvtcl.CoordToPixelRequest'
+        type: array
+    type: object
+  mrvtcl.BatchCoordToPixelResponse:
+    properties:
+      points:
+        items:
+          $ref: '#/definitions/mrvtcl.CoordToPixelResponse'
+        type: array
+    type: object
+  mrvtcl.BatchPixelToCoordRequest:
+    properties:
+      points:
+        items:
+          $ref: '#/definitions/mrvtcl.PixelToCoordRequest'
+        type: array
+    type: object
+  mrvtcl.BatchPixelToCoordResponse:
+    properties:
+      points:
+        items:
+          $ref: '#/definitions/mrvtcl.PixelToCoordResponse'
+        type: array
+    type: object
+  mrvtcl.ChartBounds:
+    properties:
+      bottom:
+        format: int32
+        type: integer
+      height:
+        format: int32
+        type: integer
+      left:
+        format: int32
+        type: integer
+      right:
+        format: int32
+        type: integer
+      top:
+        format: int32
+        type: integer
+      width:
+        format: int32
+        type: integer
+    type: object
+  mrvtcl.CoordToPixelRequest:
+    properties:
+      latitude:
+        type: number
+      longitude:
+        type: number
+    type: object
+  mrvtcl.CoordToPixelResponse:
+    properties:
+      error:
+        type: string
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  mrvtcl.GeoRefStatus:
+    properties:
+      bounds:
+        $ref: '#/definitions/mrvtcl.ChartBounds'
+      georeferenced:
+        type: boolean
+    type: object
+  mrvtcl.PixelToCoordRequest:
+    properties:
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  mrvtcl.PixelToCoordResponse:
+    properties:
+      error:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+    type: object
 info:
-  contact:
-    email: support@marinvent.local
-    name: API Support
-    url: https://github.com/marinvent/marivent
-  description: API for accessing and exporting Jeppesen terminal charts
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  termsOfService: http://swagger.io/terms/
-  title: Marinvent Chart API
-  version: "1.0"
+  contact: {}
 paths:
   /api/v1/airports/{icao}:
     get:
@@ -168,6 +246,11 @@ paths:
         in: query
         name: search
         type: string
+      - description: 'Chart types to include - can be ''vfr'', ''ifr'', or ''vfr,ifr''
+          (default: both)'
+        in: query
+        name: types
+        type: string
       produces:
       - application/json
       responses:
@@ -210,6 +293,162 @@ paths:
       summary: Export chart to PDF
       tags:
       - charts
+  /api/v1/charts/{icao}/geo/batch-coord2pixel/{filename}:
+    post:
+      consumes:
+      - application/json
+      description: Converts multiple geographic coordinates to pixel coordinates
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      - description: Geographic coordinates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/mrvtcl.BatchCoordToPixelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mrvtcl.BatchCoordToPixelResponse'
+      summary: Batch convert coordinates to pixels
+      tags:
+      - georef
+  /api/v1/charts/{icao}/geo/batch-pixel2coord/{filename}:
+    post:
+      consumes:
+      - application/json
+      description: Converts multiple pixel coordinates to geographic coordinates
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      - description: Pixel coordinates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/mrvtcl.BatchPixelToCoordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mrvtcl.BatchPixelToCoordResponse'
+      summary: Batch convert pixels to coordinates
+      tags:
+      - georef
+  /api/v1/charts/{icao}/geo/coord2pixel/{filename}:
+    post:
+      consumes:
+      - application/json
+      description: Converts geographic coordinates (lat, lon) to chart pixel coordinates
+        (x, y)
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      - description: Geographic coordinates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/mrvtcl.CoordToPixelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mrvtcl.CoordToPixelResponse'
+      summary: Convert coordinates to pixel
+      tags:
+      - georef
+  /api/v1/charts/{icao}/geo/pixel2coord/{filename}:
+    post:
+      consumes:
+      - application/json
+      description: Converts chart pixel coordinates (x, y) to geographic coordinates
+        (lat, lon)
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      - description: Pixel coordinates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/mrvtcl.PixelToCoordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mrvtcl.PixelToCoordResponse'
+      summary: Convert pixel to coordinates
+      tags:
+      - georef
+  /api/v1/charts/{icao}/geo/status/{filename}:
+    get:
+      consumes:
+      - application/json
+      description: Returns whether a chart is georeferenced and its pixel bounds
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename (e.g., KJFK225)
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mrvtcl.GeoRefStatus'
+      summary: Get chart georeferencing status
+      tags:
+      - georef
   /health:
     get:
       consumes:
