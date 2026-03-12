@@ -10,14 +10,7 @@ on:
 jobs:
   build:
     name: Build & Package
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          # Linux/macOS builds for server and client
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -32,58 +25,46 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Windows-specific: Set up MSVC for tcl2emf.cpp
-      - name: Set up MSVC (Windows)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
+      - name: Generate OpenAPI Docs
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@latest
+          swag init -g cmd/server/main.go -o docs --parseInternal
 
-      # Build server
-      - name: Build Server
+      - name: Build Server (32-bit for DLL support)
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOARCH: "386"
+          CGO_ENABLED: "0"
         run: |
           go build -v -o marinvent-server.exe ./cmd/server
 
-      # Build client
-      - name: Build Client
+      - name: Build CLI (64-bit)
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOARCH: "amd64"
+          CGO_ENABLED: "0"
         run: |
           go build -v -o marinvent-cli.exe ./cmd/cli
 
-      # Build tcl2emf (Windows only) - 32-bit build
-      - name: Build tcl2emf (Windows)
-        shell: cmd
-        run: |
-          cl.exe /EHsc /MD tcl2emf.cpp /Fe:tcl2emf.exe gdi32.lib user32.lib winspool.lib
-
-      # Create platform-specific artifact package
       - name: Package Artifacts
         shell: bash
         run: |
           mkdir -p build-artifacts
-          cp marinvent-server.exe marinvent-cli.exe tcl2emf.exe pdf_fixup_threshold.py jdmtool/* build-artifacts/
+          cp marinvent-server.exe marinvent-cli.exe pdf_fixup_threshold.py build-artifacts/
+          cp -r jdmtool build-artifacts/ 2>/dev/null || true
           cd build-artifacts
-          7z a -tzip ../marinvent-windows-${{ matrix.goarch }}.zip *
+          7z a -tzip ../marinvent-windows.zip *
 
-      # Upload artifacts to workflow artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: marinvent-${{ runner.os }}-${{ matrix.goarch }}
-          path: |
-            marinvent-*.zip
+          name: marinvent-windows
+          path: marinvent-windows.zip
           retention-days: 30
 
-      # Store build outputs for release
       - name: Store Build Outputs
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets-${{ runner.os }}-${{ matrix.goarch }}
-          path: marinvent-*.zip
+          name: release-assets-windows
+          path: marinvent-windows.zip
           if-no-files-found: error
 
   release:
