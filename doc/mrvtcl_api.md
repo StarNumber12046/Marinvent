@@ -171,24 +171,29 @@ int TCL_GetGroupInfo(int pictHandle, int groupId, void* info);
 
 ### TCL_IsPictGeoRefd
 ```c
-int TCL_IsPictGeoRefd(int pictHandle);
+int TCL_IsPictGeoRefd(void* pictHandle);
 ```
 - **Address**: 0x1002ef20
 - **Purpose**: Check if picture has geographic reference
+- **Returns**: 1=georeferenced, -21=not georeferenced
+- **Note**: Approach plates (e.g., 109a, 109b suffix) are typically NOT georeferenced
 
 ### TCL_GeoLatLon2XY
 ```c
-int TCL_GeoLatLon2XY(int pictHandle, double lat, double lon, double* x, double* y);
+int TCL_GeoLatLon2XY(void* pictHandle, double lat, double lon, int* x, int* y);
 ```
 - **Address**: 0x1002fbe0
-- **Purpose**: Convert latitude/longitude to picture coordinates
+- **Purpose**: Convert latitude/longitude to chart pixel coordinates
+- **Returns**: 1=success, -9=invalid pointers, -21=not georeferenced, -23=out of bounds
+- **Accuracy**: Round-trip error ~1-10 meters
 
 ### TCL_GeoXY2LatLon
 ```c
-int TCL_GeoXY2LatLon(int pictHandle, double x, double y, double* lat, double* lon);
+int TCL_GeoXY2LatLon(void* pictHandle, int x, int y, double* lat, double* lon);
 ```
 - **Address**: 0x10030330
-- **Purpose**: Convert picture coordinates to latitude/longitude
+- **Purpose**: Convert chart pixel coordinates to latitude/longitude
+- **Returns**: 1=success, -9=invalid pointers, -21=not georeferenced, -23=out of bounds
 
 ## Palette Functions
 

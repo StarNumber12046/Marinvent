@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static LARGE_INTEGER gFreq;
 static LARGE_INTEGER gLastTime;
@@ -40,6 +41,9 @@ typedef int (__cdecl *TCL_ClosePict_t)(void*);
 typedef unsigned int (__cdecl *TCL_GetNumPictsInFile_t)(const char*, unsigned int*);
 typedef int (__cdecl *TCL_GetPictRect_t)(void*, RECT*);
 typedef int (__cdecl *TCL_Display_t)(void*, HDC, float, float, RECT*, POINT*, unsigned short);
+typedef int (__cdecl *TCL_IsPictGeoRefd_t)(void*);
+typedef int (__cdecl *TCL_GeoLatLon2XY_t)(void*, double, double, int*, int*);
+typedef int (__cdecl *TCL_GeoXY2LatLon_t)(void*, int, int, double*, double*);
 
 typedef void (__cdecl *MF_LibOpen_t)(void);
 typedef void (__cdecl *MF_LibClose_t)(void);
@@ -56,6 +60,9 @@ static TCL_ClosePict_t TCL_ClosePict = NULL;
 static TCL_GetNumPictsInFile_t TCL_GetNumPictsInFile = NULL;
 static TCL_GetPictRect_t TCL_GetPictRect = NULL;
 static TCL_Display_t TCL_Display = NULL;
+static TCL_IsPictGeoRefd_t TCL_IsPictGeoRefd = NULL;
+static TCL_GeoLatLon2XY_t TCL_GeoLatLon2XY = NULL;
+static TCL_GeoXY2LatLon_t TCL_GeoXY2LatLon = NULL;
 
 static MF_LibOpen_t MF_LibOpen = NULL;
 static MF_LibClose_t MF_LibClose = NULL;
@@ -104,6 +111,9 @@ static int LoadDLLs(void) {
     TCL_GetNumPictsInFile = (TCL_GetNumPictsInFile_t)GetProcAddress(hMrvTcl, "TCL_GetNumPictsInFile");
     TCL_GetPictRect = (TCL_GetPictRect_t)GetProcAddress(hMrvTcl, "TCL_GetPictRect");
     TCL_Display = (TCL_Display_t)GetProcAddress(hMrvTcl, "TCL_Display");
+    TCL_IsPictGeoRefd = (TCL_IsPictGeoRefd_t)GetProcAddress(hMrvTcl, "TCL_IsPictGeoRefd");
+    TCL_GeoLatLon2XY = (TCL_GeoLatLon2XY_t)GetProcAddress(hMrvTcl, "TCL_GeoLatLon2XY");
+    TCL_GeoXY2LatLon = (TCL_GeoXY2LatLon_t)GetProcAddress(hMrvTcl, "TCL_GeoXY2LatLon");
     
     if (!MF_LibOpen || !TCL_LibInit || !TCL_Open || !TCL_Display) {
         fprintf(stderr, "Missing required functions\n");
@@ -512,7 +522,9 @@ static int ExportToEMF(const char* tclFile, const char* emfFile, int pictIndex) 
 
 static void PrintUsage(const char* progName) {
     printf("TCL to EMF/PDF Converter\n\n");
-    printf("Usage: %s <input.tcl> [output.emf|output.pdf] [picture_index]\n\n", progName);
+    printf("Usage:\n");
+    printf("  %s <input.tcl> [output] [picture_index]   - Export to EMF/PDF\n", progName);
+    printf("  %s -geo <input.tcl> [picture_index]      - Test georeferencing\n\n", progName);
     printf("Arguments:\n");
     printf("  input.tcl      Input TCL file\n");
     printf("  output         Output file (.emf or .pdf, default: output.emf)\n");
@@ -520,6 +532,112 @@ static void PrintUsage(const char* progName) {
     printf("Examples:\n");
     printf("  %s chart.tcl chart.pdf\n", progName);
     printf("  %s chart.tcl chart.emf 1\n", progName);
+    printf("  %s -geo chart.tcl 1\n", progName);
+}
+
+static int TestGeoref(const char* tclFile, int pictIndex) {
+    void* pictHandle = NULL;
+    unsigned int numPicts = 0;
+    
+    if (!TCL_Open(tclFile, 0, NULL, NULL)) {
+        fprintf(stderr, "TCL_Open failed\n");
+        return -1;
+    }
+    
+    TCL_GetNumPictsInFile(tclFile, &numPicts);
+    printf("Number of pictures in file: %u\n", numPicts);
+    printf("Opening picture %d...\n", pictIndex);
+    fflush(stdout);
+    
+    if (!TCL_Open(tclFile, pictIndex, NULL, &pictHandle)) {
+        fprintf(stderr, "TCL_Open for picture %d failed\n", pictIndex);
+        return -1;
+    }
+    
+    printf("Picture %d opened (handle: %p)\n", pictIndex, pictHandle);
+    printf("Checking georef status...\n");
+    fflush(stdout);
+    
+    if (!TCL_IsPictGeoRefd) {
+        fprintf(stderr, "TCL_IsPictGeoRefd not available\n");
+        TCL_ClosePict(pictHandle);
+        return -1;
+    }
+    
+    int isGeoRefd = TCL_IsPictGeoRefd(pictHandle);
+    printf("TCL_IsPictGeoRefd returned: %d\n", isGeoRefd);
+    fflush(stdout);
+    printf("Georeferenced: %s\n\n", isGeoRefd ? "YES" : "NO");
+    fflush(stdout);
+    
+    if (!isGeoRefd) {
+        printf("Chart is not georeferenced\n");
+        TCL_ClosePict(pictHandle);
+        return 0;
+    }
+    
+    printf("Getting picture rect...\n");
+    fflush(stdout);
+    
+    RECT pictRect;
+    TCL_GetPictRect(pictHandle, & pictRect);
+    printf("Picture rect done\n");
+    fflush(stdout);
+    printf("Chart pixel bounds: left=%d, top=%d, right=%d, bottom=%d\n",
+           pictRect.left, pictRect.top, pictRect.right, pictRect.bottom);
+    fflush(stdout);
+    
+    if (!TCL_GeoLatLon2XY || !TCL_GeoXY2LatLon) {
+        printf("Geocoordinate conversion functions not available\n");
+        TCL_ClosePict(pictHandle);
+        return 0;
+    }
+    
+    printf("\nGeocoordinate conversion functions: AVAILABLE\n");
+    fflush(stdout);
+    
+    double testLat = 43.095464;
+    double testLon = 12.502877;
+    int x = 0, y = 0;
+    
+    printf("\n=== Test 1: LatLon -> XY ===\n");
+    printf("Input: Lat=%.6f, Lon=%.6f\n", testLat, testLon);
+    fflush(stdout);
+    int result = TCL_GeoLatLon2XY(pictHandle, testLat, testLon, &x, &y);
+    printf("TCL_GeoLatLon2XY result: %d, X=%d, Y=%d\n", result, x, y);
+    fflush(stdout);
+    
+    printf("\n=== Test 2: XY -> LatLon (center) ===\n");
+    int cx = (pictRect.right - pictRect.left) / 2;
+    int cy = (pictRect.bottom - pictRect.top) / 2;
+    double lat = 0, lon = 0;
+    printf("Input: X=%d, Y=%d\n", cx, cy);
+    fflush(stdout);
+    int result2 = TCL_GeoXY2LatLon(pictHandle, cx, cy, &lat, &lon);
+    printf("TCL_GeoXY2LatLon result: %d, Lat=%.6f, Lon=%.6f\n", result2, lat, lon);
+    fflush(stdout);
+    
+    printf("\n=== Test 3: XY -> LatLon (corner) ===\n");
+    int result3 = TCL_GeoXY2LatLon(pictHandle, 100, 100, &lat, &lon);
+    printf("TCL_GeoXY2LatLon(100,100) result: %d, Lat=%.6f, Lon=%.6f\n", result3, lat, lon);
+    fflush(stdout);
+    
+    if (result == 1 && x != 0) {
+        printf("\n=== Round-trip test ===\n");
+        double lat2 = 0, lon2 = 0;
+        int rtResult = TCL_GeoXY2LatLon(pictHandle, x, y, &lat2, &lon2);
+        printf("XY(%d,%d) -> Lat=%.6f, Lon=%.6f (result=%d)\n", x, y, lat2, lon2, rtResult);
+        double latErr = fabs(testLat - lat2) * 111000.0;  // approx meters
+        double lonErr = fabs(testLon - lon2) * 111000.0 * cos(testLat * 3.14159 / 180.0);
+        printf("Error: %.1fm lat, %.1fm lon\n", latErr, lonErr);
+    }
+    
+    printf("\nChart info: bounds=(%d,%d)-(%d,%d)\n",
+           pictRect.left, pictRect.top, pictRect.right, pictRect.bottom);
+    printf("Error codes: 1=success, -9=invalid, -21=not georef, -23=out of bounds\n");
+    
+    TCL_ClosePict(pictHandle);
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -529,6 +647,59 @@ int main(int argc, char* argv[]) {
     if (argc < 2) {
         PrintUsage(argv[0]);
         return 1;
+    }
+    
+    if (strcmp(argv[1], "-geo") == 0) {
+        if (argc < 3) {
+            printf("Usage: %s -geo <input.tcl> [picture_index]\n", argv[0]);
+            return 1;
+        }
+        
+        const char* tclFile = argv[2];
+        int pictIndex = (argc > 3) ? atoi(argv[3]) : 1;
+        
+        printf("Testing georeferencing for: %s (picture %d)\n\n", tclFile, pictIndex);
+        fflush(stdout);
+        
+        FILE* f = fopen(tclFile, "rb");
+        if (!f) {
+            fprintf(stderr, "File not found: %s\n", tclFile);
+            return 1;
+        }
+        fclose(f);
+        
+        printf("File found, loading DLLs...\n");
+        fflush(stdout);
+        
+        TimerInit();
+        printf("Calling LoadDLLs...\n");
+        fflush(stdout);
+        
+        if (!LoadDLLs()) {
+            fprintf(stderr, "Failed to load DLLs\n");
+            return 1;
+        }
+        printf("DLLs loaded successfully\n");
+        fflush(stdout);
+        TimerTick("LoadDLLs");
+        
+    if (!InitTCLLib()) {
+        fprintf(stderr, "TCL_LibInit failed\n");
+        UnloadJeppesenFonts();
+        UnloadDLLs();
+        return 1;
+    }
+    printf("InitTCLLib succeeded\n");
+    fflush(stdout);
+    TimerTick("InitTCLLib");
+        
+        int result = TestGeoref(tclFile, pictIndex);
+        
+        TCL_LibClose();
+        UnloadJeppesenFonts();
+        UnloadDLLs();
+        
+        return result;
     }
     
     const char* tclFile = argv[1];
