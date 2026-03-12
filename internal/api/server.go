@@ -47,6 +47,8 @@ type ServerConfig struct {
 	TypesDBF     string
 	AirportsDBF  string
 	TCLDir       string
+	DLLPath      string
+	FontDir      string
 }
 
 func NewServer(cfg ServerConfig) (*Server, error) {
@@ -63,6 +65,9 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	}
 
 	catalog := charts.NewCatalog(dbf, cfg.TCLDir)
+	log.Printf("Preloading chart catalog...")
+	catalog.Preload()
+	log.Printf("Chart catalog loaded: %d charts", catalog.NumCharts())
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -96,6 +101,11 @@ func registerRoutes(r *gin.Engine, h *Handler) {
 	{
 		api.GET("/charts/:icao", h.GetCharts)
 		api.GET("/charts/:icao/export/:filename", h.GetChartPDF)
+		api.GET("/charts/:icao/geo/status/:filename", h.GetChartGeoStatus)
+		api.POST("/charts/:icao/geo/pixel2coord/:filename", h.PixelToCoord)
+		api.POST("/charts/:icao/geo/coord2pixel/:filename", h.CoordToPixel)
+		api.POST("/charts/:icao/geo/batch-pixel2coord/:filename", h.BatchPixelToCoord)
+		api.POST("/charts/:icao/geo/batch-coord2pixel/:filename", h.BatchCoordToPixel)
 		api.GET("/chart-types", h.GetChartTypes)
 		api.GET("/airports/:icao", h.GetAirport)
 	}
@@ -126,6 +136,8 @@ func LoadConfigFromEnv() ServerConfig {
 		TypesDBF:     getEnv("TYPES_DBF", "C:\\ProgramData\\Jeppesen\\Common\\TerminalCharts\\ctypes.dbf"),
 		AirportsDBF:  getEnv("AIRPORTS_DBF", "C:\\ProgramData\\Jeppesen\\Common\\TerminalCharts\\Airports.dbf"),
 		TCLDir:       getEnv("TCL_DIR", "TCLs"),
+		DLLPath:      getEnv("DLL_PATH", ""),
+		FontDir:      getEnv("FONT_DIR", "C:\\ProgramData\\Jeppesen\\Common\\Fonts"),
 	}
 }
 
