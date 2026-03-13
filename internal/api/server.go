@@ -100,6 +100,7 @@ func registerRoutes(r *gin.Engine, h *Handler) {
 	api := r.Group("/api/v1")
 	{
 		api.GET("/charts/:icao", h.GetCharts)
+		api.GET("/charts/:icao/data/:filename", h.GetChartData)
 		api.GET("/charts/:icao/export/:filename", h.GetChartPDF)
 		api.GET("/charts/:icao/geo/status/:filename", h.GetChartGeoStatus)
 		api.POST("/charts/:icao/geo/pixel2coord/:filename", h.PixelToCoord)

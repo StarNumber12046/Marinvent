@@ -13,9 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 static LARGE_INTEGER gFreq;
 static LARGE_INTEGER gLastTime;
+
+static int PatchPDFMediaBox(const char* pdfPath, int width, int height, int dpi);
 
 static void TimerInit(void) {
     QueryPerformanceFrequency(&gFreq);
@@ -299,6 +302,12 @@ static HDC CreatePDFPrinterDC(const char* pdfPath) {
     return hdc;
 }
 
+static int GetPaperSize(HDC hdc, int* width, int* height) {
+    *width = GetDeviceCaps(hdc, HORZRES);
+    *height = GetDeviceCaps(hdc, VERTRES);
+    return 1;
+}
+
 static int ExportToPDF(const char* tclFile, const char* pdfFile, int pictIndex) {
     void* pictHandle = NULL;
     unsigned int numPicts = 0;
@@ -363,17 +372,15 @@ static int ExportToPDF(const char* tclFile, const char* pdfFile, int pictIndex) 
     int pageWidth = GetDeviceCaps(hdcPrinter, HORZRES);
     int pageHeight = GetDeviceCaps(hdcPrinter, VERTRES);
     
-    double scaleX = (double)pageWidth / width;
-    double scaleY = (double)pageHeight / height;
-    double scale = (scaleX < scaleY) ? scaleX : scaleY;
-    
-    int scaledWidth = (int)(width * scale);
-    int scaledHeight = (int)(height * scale);
-    int offsetX = (pageWidth - scaledWidth) / 2;
-    int offsetY = (pageHeight - scaledHeight) / 2;
+    // Scale chart to perfectly fit the PAGE HEIGHT
+    // This ensures the chart touches both the top and bottom of the PDF page,
+    // eliminating any vertical offset issues. The Python script will then
+    // just trim the horizontal width.
+    int drawHeight = pageHeight;
+    int drawWidth = (int)((double)width * pageHeight / height);
     
     printf("Page size: %d x %d at %d DPI\n", pageWidth, pageHeight, dpi);
-    printf("Scaled to: %d x %d (offset: %d, %d)\n", scaledWidth, scaledHeight, offsetX, offsetY);
+    printf("Chart scaled to: %d x %d\n", drawWidth, drawHeight);
     
     DOCINFOA di = {0};
     di.cbSize = sizeof(DOCINFOA);
@@ -397,10 +404,20 @@ static int ExportToPDF(const char* tclFile, const char* pdfFile, int pictIndex) 
     }
     TimerTick("StartPage");
     
+    printf("Picture rect: left=%d, top=%d, right=%d, bottom=%d\n", 
+           pictRect.left, pictRect.top, pictRect.right, pictRect.bottom);
+    
     SetMapMode(hdcPrinter, MM_ANISOTROPIC);
+    // Source window: Use actual pixel bounds
+    SetWindowOrgEx(hdcPrinter, pictRect.left, pictRect.top, NULL);
     SetWindowExtEx(hdcPrinter, width, height, NULL);
-    SetViewportExtEx(hdcPrinter, scaledWidth, scaledHeight, NULL);
-    SetViewportOrgEx(hdcPrinter, offsetX, offsetY, NULL);
+    
+    // Dest viewport: Scale to page width, keeping aspect ratio
+    // But draw it starting at 0,0 so it anchors to the corner
+    SetViewportExtEx(hdcPrinter, drawWidth, drawHeight, NULL);
+    SetViewportOrgEx(hdcPrinter, 0, 0, NULL);
+    
+    printf("Scaled to %d x %d at 0,0\n", drawWidth, drawHeight);
     
     MF_BeginPainting(hdcPrinter);
     TimerTick("MF_BeginPainting");
@@ -637,6 +654,61 @@ static int TestGeoref(const char* tclFile, int pictIndex) {
     printf("Error codes: 1=success, -9=invalid, -21=not georef, -23=out of bounds\n");
     
     TCL_ClosePict(pictHandle);
+    return 0;
+}
+
+static int PatchPDFMediaBox(const char* pdfPath, int width, int height, int dpi) {
+    FILE* f = fopen(pdfPath, "r+b");
+    if (!f) {
+        fprintf(stderr, "PatchPDFMediaBox: cannot open %s\n", pdfPath);
+        return -1;
+    }
+    
+    fseek(f, 0, SEEK_END);
+    long fileSize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    char* buffer = (char*)malloc(fileSize + 1);
+    if (!buffer) {
+        fclose(f);
+        return -1;
+    }
+    
+    fread(buffer, 1, fileSize, f);
+    buffer[fileSize] = '\0';
+    
+    double wPt = width * 72.0 / dpi;
+    double hPt = height * 72.0 / dpi;
+    
+    char* mbStart = strstr(buffer, "/MediaBox");
+    if (mbStart) {
+        char* nl = strchr(mbStart, ']');
+        if (nl) {
+            size_t prefixLen = mbStart - buffer;
+            size_t suffixStart = nl + 1 - buffer;
+            size_t suffixLen = fileSize - suffixStart;
+            
+            char replace[128];
+            snprintf(replace, sizeof(replace), "/MediaBox [0 0 %.2f %.2f]", wPt, hPt);
+            
+            char* newBuffer = (char*)malloc(prefixLen + strlen(replace) + suffixLen + 1);
+            memcpy(newBuffer, buffer, prefixLen);
+            strcpy(newBuffer + prefixLen, replace);
+            memcpy(newBuffer + prefixLen + strlen(replace), buffer + suffixStart, suffixLen);
+            newBuffer[prefixLen + strlen(replace) + suffixLen] = '\0';
+            
+            fseek(f, 0, SEEK_SET);
+            fwrite(newBuffer, 1, strlen(newBuffer), f);
+            
+            free(newBuffer);
+            printf("Patched MediaBox to %.2f x %.2f points\n", wPt, hPt);
+        }
+    } else {
+        fprintf(stderr, "PatchPDFMediaBox: /MediaBox not found\n");
+    }
+    
+    free(buffer);
+    fclose(f);
     return 0;
 }
 

@@ -44,6 +44,21 @@ definitions:
       timezone:
         type: string
     type: object
+  api.ChartDataResponse:
+    properties:
+      filename:
+        type: string
+      georef:
+        $ref: '#/definitions/mrvtcl.GeoRefStatus'
+      has_tcl:
+        type: boolean
+      height:
+        type: integer
+      icao:
+        type: string
+      width:
+        type: integer
+    type: object
   api.ChartInfo:
     properties:
       category:
@@ -259,6 +274,33 @@ paths:
           schema:
             $ref: '#/definitions/api.ChartList'
       summary: List charts for ICAO
+      tags:
+      - charts
+  /api/v1/charts/{icao}/data/{filename}:
+    get:
+      consumes:
+      - application/json
+      description: Returns chart data including dimensions and georeferencing status
+        for a specific chart
+      parameters:
+      - description: ICAO airport code
+        in: path
+        name: icao
+        required: true
+        type: string
+      - description: Chart filename (e.g., KJFK225)
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ChartDataResponse'
+      summary: Get chart data
       tags:
       - charts
   /api/v1/charts/{icao}/export/{filename}:

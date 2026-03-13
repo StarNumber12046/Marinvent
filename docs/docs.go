@@ -120,6 +120,45 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/charts/{icao}/data/{filename}": {
+            "get": {
+                "description": "Returns chart data including dimensions and georeferencing status for a specific chart",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "charts"
+                ],
+                "summary": "Get chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ICAO airport code",
+                        "name": "icao",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chart filename (e.g., KJFK225)",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.ChartDataResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/charts/{icao}/export/{filename}": {
             "get": {
                 "description": "Exports a specific chart to PDF format. Returns the chart as a PDF file. Post-processing is enabled by default to remove waypoint overlays; use ?no_postprocess=1 to disable.",
@@ -489,6 +528,29 @@ const docTemplate = `{
                 },
                 "timezone": {
                     "type": "string"
+                }
+            }
+        },
+        "api.ChartDataResponse": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string"
+                },
+                "georef": {
+                    "$ref": "#/definitions/mrvtcl.GeoRefStatus"
+                },
+                "has_tcl": {
+                    "type": "boolean"
+                },
+                "height": {
+                    "type": "integer"
+                },
+                "icao": {
+                    "type": "string"
+                },
+                "width": {
+                    "type": "integer"
                 }
             }
         },

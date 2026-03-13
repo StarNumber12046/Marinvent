@@ -189,6 +189,58 @@ def analyze_blocks(content, page_bounds):
     return blocks
 
 
+def analyze_image_bounds(data, page_bounds):
+    """
+    Finds the actual content bounds in the PDF drawing commands.
+    Looks for drawing commands (m, l, re, etc) and calculates the bounding box.
+    """
+    streams = find_streams(data)
+    min_x, min_y = float("inf"), float("inf")
+    max_x, max_y = float("-inf"), float("-inf")
+
+    # regex for coordinates in drawing commands, very simplified
+    # looks for coordinates followed by m, l, re, v, y, c
+    coord_pattern = re.compile(rb"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(?:m|l)\b")
+    rect_pattern = re.compile(
+        rb"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+re\b"
+    )
+
+    found_content = False
+
+    for stream in streams:
+        content = decompress(stream["raw"], stream["compressed"])
+        if not content:
+            continue
+
+        for match in coord_pattern.finditer(content):
+            x, y = float(match.group(1)), float(match.group(2))
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x)
+            max_y = max(max_y, y)
+            found_content = True
+
+        for match in rect_pattern.finditer(content):
+            x, y, w, h = [float(match.group(i)) for i in range(1, 5)]
+            min_x = min(min_x, x, x + w)
+            min_y = min(min_y, y, y + h)
+            max_x = max(max_x, x, x + w)
+            max_y = max(max_y, y, y + h)
+            found_content = True
+
+    if not found_content:
+        return None
+
+    # Add a small margin
+    margin = 5
+    return [
+        max(0, min_x - margin),
+        max(0, min_y - margin),
+        max_x + margin,
+        max_y + margin,
+    ]
+
+
 def process_pdf(pdf_path, dry_run=False):
     pdf_path = Path(pdf_path)
     if not pdf_path.exists():
@@ -199,7 +251,7 @@ def process_pdf(pdf_path, dry_run=False):
         data = f.read()
 
     mb_m = re.search(
-        rb"/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]", data
+        rb"/MediaBox\s*\[\s*([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s*\]", data
     )
     page_bounds = [0, 0, 612, 792]
     if mb_m:
@@ -208,8 +260,9 @@ def process_pdf(pdf_path, dry_run=False):
     print(f"\n{'=' * 70}")
     print(f"PDF: {pdf_path.name}")
     print(
-        f"Page: {page_bounds[0]:.0f},{page_bounds[1]:.0f} to {page_bounds[2]:.0f},{page_bounds[3]:.0f}"
+        f"Original Page: {page_bounds[0]:.0f},{page_bounds[1]:.0f} to {page_bounds[2]:.0f},{page_bounds[3]:.0f}"
     )
+
     print(f"Overlay detection: {MIN_SIZE}pt <= size <= {MAX_SIZE}pt AND on-page")
     print(f"{'=' * 70}\n")
 
@@ -286,7 +339,7 @@ def process_pdf(pdf_path, dry_run=False):
         print(f"\n  No blocks to remove.")
         return 0
 
-    print(f"\n  Applying changes...")
+    print(f"\n  Applying block removals...")
 
     new_objects = {}
     for obj_num, info in blocks_by_stream.items():

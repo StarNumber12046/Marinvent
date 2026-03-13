@@ -31,6 +31,7 @@ var (
 	procSetWindowExtEx     = gdi32.NewProc("SetWindowExtEx")
 	procSetViewportExtEx   = gdi32.NewProc("SetViewportExtEx")
 	procSetViewportOrgEx   = gdi32.NewProc("SetViewportOrgEx")
+	procSetWindowOrgEx     = gdi32.NewProc("SetWindowOrgEx")
 	procDeleteDC           = gdi32.NewProc("DeleteDC")
 
 	procCreateDCA = gdi32.NewProc("CreateDCA")
@@ -219,6 +220,11 @@ func SetViewportExtEx(hdc uintptr, x, y int32) bool {
 
 func SetViewportOrgEx(hdc uintptr, x, y int32) bool {
 	ret, _, _ := procSetViewportOrgEx.Call(hdc, uintptr(x), uintptr(y), 0)
+	return ret != 0
+}
+
+func SetWindowOrgEx(hdc uintptr, x, y int32) bool {
+	ret, _, _ := procSetWindowOrgEx.Call(hdc, uintptr(x), uintptr(y), 0)
 	return ret != 0
 }
 

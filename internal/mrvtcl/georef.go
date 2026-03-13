@@ -4,7 +4,6 @@ package mrvtcl
 
 import (
 	"errors"
-	"fmt"
 )
 
 var (
@@ -35,9 +34,6 @@ func (c *Chart) GetGeoRefStatus() (*GeoRefStatus, error) {
 }
 
 func (c *Chart) PixelToCoord(x, y int32) (lat, lon float64, err error) {
-	chartMu.Lock()
-	defer chartMu.Unlock()
-
 	if c.handle == 0 {
 		return 0, 0, ErrNotInitialized
 	}
@@ -46,26 +42,15 @@ func (c *Chart) PixelToCoord(x, y int32) (lat, lon float64, err error) {
 		return 0, 0, ErrNotGeoreferenced
 	}
 
-	result := TCL_GeoXY2LatLon(c.handle, x, y, &lat, &lon)
-
-	switch result {
-	case 1:
-		return lat, lon, nil
-	case -9:
-		return 0, 0, ErrInvalidParam
-	case -21:
-		return 0, 0, ErrNotGeoreferenced
-	case -23:
-		return 0, 0, ErrOutOfBounds
-	default:
-		return 0, 0, fmt.Errorf("TCL_GeoXY2LatLon failed: %d", result)
+	geoPoints, errs := c.BatchPixelToCoord([]PixelPoint{{X: x, Y: y}})
+	if errs[0] != nil {
+		return 0, 0, errs[0]
 	}
+
+	return geoPoints[0].Latitude, geoPoints[0].Longitude, nil
 }
 
 func (c *Chart) CoordToPixel(lat, lon float64) (x, y int32, err error) {
-	chartMu.Lock()
-	defer chartMu.Unlock()
-
 	if c.handle == 0 {
 		return 0, 0, ErrNotInitialized
 	}
@@ -74,30 +59,32 @@ func (c *Chart) CoordToPixel(lat, lon float64) (x, y int32, err error) {
 		return 0, 0, ErrNotGeoreferenced
 	}
 
-	result := TCL_GeoLatLon2XY(c.handle, lat, lon, &x, &y)
-
-	switch result {
-	case 1:
-		return x, y, nil
-	case -9:
-		return 0, 0, ErrInvalidParam
-	case -21:
-		return 0, 0, ErrNotGeoreferenced
-	case -23:
-		return 0, 0, ErrOutOfBounds
-	default:
-		return 0, 0, fmt.Errorf("TCL_GeoLatLon2XY failed: %d", result)
+	pixelPoints, errs := c.BatchCoordToPixel([]GeoPoint{{Latitude: lat, Longitude: lon}})
+	if errs[0] != nil {
+		return 0, 0, errs[0]
 	}
+
+	return pixelPoints[0].X, pixelPoints[0].Y, nil
 }
 
 func (c *Chart) BatchPixelToCoord(points []PixelPoint) ([]GeoPoint, []error) {
 	results := make([]GeoPoint, len(points))
 	errs := make([]error, len(points))
 
+	if c.handle == 0 || c.filePath == "" {
+		for i := range results {
+			errs[i] = ErrNotInitialized
+		}
+		return results, errs
+	}
+
 	for i, p := range points {
-		lat, lon, err := c.PixelToCoord(p.X, p.Y)
-		results[i] = GeoPoint{Latitude: lat, Longitude: lon}
-		errs[i] = err
+		result, err := PixelToCoordCLI(c.filePath, int(c.pictIndex), p.X, p.Y)
+		if err != nil {
+			errs[i] = err
+		} else {
+			results[i] = GeoPoint{Latitude: result.Latitude, Longitude: result.Longitude}
+		}
 	}
 
 	return results, errs
@@ -107,10 +94,20 @@ func (c *Chart) BatchCoordToPixel(points []GeoPoint) ([]PixelPoint, []error) {
 	results := make([]PixelPoint, len(points))
 	errs := make([]error, len(points))
 
+	if c.handle == 0 || c.filePath == "" {
+		for i := range results {
+			errs[i] = ErrNotInitialized
+		}
+		return results, errs
+	}
+
 	for i, p := range points {
-		x, y, err := c.CoordToPixel(p.Latitude, p.Longitude)
-		results[i] = PixelPoint{X: x, Y: y}
-		errs[i] = err
+		x, y, err := CoordToPixelCLI(c.filePath, int(c.pictIndex), p.Latitude, p.Longitude)
+		if err != nil {
+			errs[i] = err
+		} else {
+			results[i] = PixelPoint{X: x, Y: y}
+		}
 	}
 
 	return results, errs

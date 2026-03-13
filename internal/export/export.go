@@ -81,8 +81,12 @@ func (e *Exporter) ExportToPDFBytes(tclPath string, postProcess bool) ([]byte, e
 		if err == nil {
 			pdfPath := filepath.Join(tempDir, "output.pdf")
 			if os.WriteFile(pdfPath, pdfData, 0644) == nil {
-				if e.runPostProcess(pdfPath) == nil {
+				log.Printf("[EXPORT] Running post-process on %s", pdfPath)
+				if err := e.runPostProcess(pdfPath); err == nil {
+					log.Printf("[EXPORT] Post-process successful, reading back %s", pdfPath)
 					pdfData, _ = os.ReadFile(pdfPath)
+				} else {
+					log.Printf("[EXPORT] Post-process failed: %v", err)
 				}
 			}
 			os.RemoveAll(tempDir)

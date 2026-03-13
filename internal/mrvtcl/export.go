@@ -37,6 +37,12 @@ func (t *timer) log(prefix string) {
 }
 
 func (c *Chart) ExportToEMF(emfPath string) error {
+	if c.filePath != "" && c.pictIndex > 0 {
+		// Use CLI version for EMF export
+		return ExportToEMFCLI(c.filePath, emfPath, int(c.pictIndex))
+	}
+
+	// Fall back to direct DLL calls if no file path available
 	chartMu.Lock()
 	defer chartMu.Unlock()
 
@@ -53,8 +59,8 @@ func (c *Chart) ExportToEMF(emfPath string) error {
 	emfRect := RECT{
 		Left:   0,
 		Top:    0,
-		Right:  width * 100,
-		Bottom: height * 100,
+		Right:  width,
+		Bottom: height,
 	}
 
 	hdcMeta := CreateEnhMetaFileA(0, emfPath, &emfRect, "Marinvent TCL Chart\\0Chart\\0")
@@ -93,6 +99,12 @@ func (c *Chart) ExportToEMF(emfPath string) error {
 }
 
 func (c *Chart) ExportToPDF(pdfPath string) error {
+	if c.filePath != "" && c.pictIndex > 0 {
+		// Use CLI version for PDF export
+		return ExportToPDFCLI(c.filePath, pdfPath, int(c.pictIndex))
+	}
+
+	// Fall back to direct DLL calls if no file path available
 	chartMu.Lock()
 	defer chartMu.Unlock()
 
@@ -101,7 +113,8 @@ func (c *Chart) ExportToPDF(pdfPath string) error {
 	}
 
 	tm := newTimer()
-	log.Printf("[EXPORT] ExportToPDF: %s (chart size: %dx%d)", pdfPath, c.bounds.Width, c.bounds.Height)
+	log.Printf("[EXPORT] ExportToPDF: %s (chart bounds: (%d,%d)-(%d,%d) size=%dx%d)",
+		pdfPath, c.bounds.Left, c.bounds.Top, c.bounds.Right, c.bounds.Bottom, c.bounds.Width, c.bounds.Height)
 
 	hdcPrinter, err := createPDFPrinterDC(pdfPath)
 	if err != nil {
@@ -116,19 +129,7 @@ func (c *Chart) ExportToPDF(pdfPath string) error {
 	pageWidth := GetDeviceCaps(hdcPrinter, HORZRES)
 	pageHeight := GetDeviceCaps(hdcPrinter, VERTRES)
 	tm.tick("GetDeviceCaps")
-	log.Printf("[EXPORT] Page size: %dx%d", pageWidth, pageHeight)
-
-	scaleX := float64(pageWidth) / float64(width)
-	scaleY := float64(pageHeight) / float64(height)
-	scale := scaleX
-	if scaleY < scaleX {
-		scale = scaleY
-	}
-
-	scaledWidth := int32(float64(width) * scale)
-	scaledHeight := int32(float64(height) * scale)
-	offsetX := (pageWidth - scaledWidth) / 2
-	offsetY := (pageHeight - scaledHeight) / 2
+	log.Printf("[EXPORT] Printer page size: %dx%d, Chart size: %dx%d", pageWidth, pageHeight, width, height)
 
 	docName, _ := syscall.BytePtrFromString(filepath.Base(pdfPath))
 	outputPath, _ := syscall.BytePtrFromString(pdfPath)
@@ -155,9 +156,10 @@ func (c *Chart) ExportToPDF(pdfPath string) error {
 	tm.tick("StartPage")
 
 	SetMapMode(hdcPrinter, MM_ANISOTROPIC)
+	SetWindowOrgEx(hdcPrinter, c.bounds.Left, c.bounds.Top)
 	SetWindowExtEx(hdcPrinter, width, height)
-	SetViewportExtEx(hdcPrinter, scaledWidth, scaledHeight)
-	SetViewportOrgEx(hdcPrinter, offsetX, offsetY)
+	SetViewportExtEx(hdcPrinter, width, height)
+	SetViewportOrgEx(hdcPrinter, 0, 0)
 	tm.tick("SetupDC")
 
 	MF_BeginPainting(hdcPrinter)
@@ -240,6 +242,10 @@ func (c *Chart) ExportToPDFBytes() ([]byte, error) {
 					if err == nil && len(pdfData) > 0 {
 						tm.tick(fmt.Sprintf("Poll(%.0fms)", float64(time.Since(pollStart).Milliseconds())))
 						tm.tick("ReadFile")
+						if err := cropPDFFileMediaBox(pdfPath, float64(c.bounds.Width), float64(c.bounds.Height)); err == nil {
+							pdfData, _ = os.ReadFile(pdfPath)
+							tm.tick("MediaBoxPatch")
+						}
 						tm.log("ExportToPDFBytes")
 						return pdfData, nil
 					}

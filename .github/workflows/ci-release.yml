@@ -44,11 +44,24 @@ jobs:
         run: |
           go build -v -o marinvent-cli.exe ./cmd/cli
 
+      - name: Setup MSVC (Developer Command Prompt)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Build tcl2emf (32-bit C++)
+        run: |
+          cl.exe /EHsc /MD tcl2emf.cpp /Fe:tcl2emf.exe gdi32.lib user32.lib winspool.lib
+
+      - name: Build georef (32-bit C++)
+        run: |
+          cl.exe /EHsc /MD georef.cpp /Fe:georef.exe gdi32.lib user32.lib winspool.lib
+
       - name: Package Artifacts
         shell: bash
         run: |
           mkdir -p build-artifacts
-          cp marinvent-server.exe marinvent-cli.exe pdf_fixup_threshold.py build-artifacts/
+          cp marinvent-server.exe marinvent-cli.exe tcl2emf.exe georef.exe pdf_fixup_threshold.py build-artifacts/
           cp -r jdmtool build-artifacts/ 2>/dev/null || true
           cd build-artifacts
           7z a -tzip ../marinvent-windows.zip *
