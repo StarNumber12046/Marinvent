@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"marinvent/internal/charts"
-	"marinvent/internal/mrvtcl"
 
 	"github.com/gin-gonic/gin"
 )
@@ -299,12 +298,11 @@ func logTimings(timings map[string]time.Duration, filename string) {
 // GetHealth returns health check
 // ChartDataResponse is the API response for getting chart data
 type ChartDataResponse struct {
-	Filename string               `json:"filename"`
-	ICAO     string               `json:"icao"`
-	Width    int32                `json:"width"`
-	Height   int32                `json:"height"`
-	HasTCL   bool                 `json:"has_tcl"`
-	GeoRef   *mrvtcl.GeoRefStatus `json:"georef,omitempty"`
+	Filename string `json:"filename"`
+	ICAO     string `json:"icao"`
+	Width    int32  `json:"width"`
+	Height   int32  `json:"height"`
+	HasTCL   bool   `json:"has_tcl"`
 }
 
 // GetChartData returns data for a single chart
@@ -333,20 +331,6 @@ func (h *Handler) GetChartData(c *gin.Context) {
 		Width:    0,
 		Height:   0,
 		HasTCL:   chart.TCLPath != "",
-	}
-
-	if chart.TCLPath != "" && mrvtcl.IsInitialized() {
-		tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
-		if err == nil {
-			defer tclChart.Close()
-			response.Width = tclChart.Width()
-			response.Height = tclChart.Height()
-
-			status, err := tclChart.GetGeoRefStatus()
-			if err == nil {
-				response.GeoRef = status
-			}
-		}
 	}
 
 	c.JSON(http.StatusOK, response)

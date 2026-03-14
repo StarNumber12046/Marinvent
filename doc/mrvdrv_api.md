@@ -1,395 +1,316 @@
-# mrvdrv.dll API Documentation
+# mrvtcl.dll API Documentation
 
 ## Overview
-mrvdrv.dll (Marinvent Framework Driver) provides low-level painting primitives for rendering graphics. It abstracts the Windows GDI to provide a consistent interface for rendering to different output devices (screen, printer, metafile).
+
+mrvtcl.dll is the core library for parsing and rendering Marinvent TCL (Terminal Chart Library) files. It provides functions to open, manipulate, and display terminal charts.
 
 ## Architecture
+
 - **Language**: 32-bit x86 Windows DLL
 - **Image Base**: 0x10000000
 - **Compiler**: Visual C++ (cdecl calling convention)
-- **Purpose**: Graphics driver abstraction layer
+- **Dependencies**: mrvdrv.dll (painting driver)
 
 ## Initialization Functions
 
-### MF_LibOpen
-```c
-void MF_LibOpen(void);
-```
-- **Address**: 0x100011d0
-- **Purpose**: Initialize the driver library
-- **Note**: Checks Windows version for platform-specific behavior
+### TCL_LibInit
 
-### MF_LibClose
 ```c
-void MF_LibClose(void);
+int TCL_LibInit(int param1, int param2, int param3, void* param4);
 ```
-- **Address**: 0x10001210
-- **Purpose**: Close the driver library
 
-## Painting Context Functions
-
-### MF_BeginPainting
-```c
-int MF_BeginPainting(HDC hdc);
-```
-- **Address**: 0x10001220
-- **Purpose**: Initialize painting context for a device context
+- **Address**: 0x10033e40
+- **Purpose**: Initialize the TCL library
 - **Parameters**:
-  - `hdc`: Windows device context handle
-- **Returns**: 1 on success
-- **Side Effects**:
-  - Saves current GDI state (clip region, pen, brush, font, palette)
-  - Sets default drawing mode (R2_COPYPEN)
-  - Sets default fill mode (WINDING)
-  - Sets default background mode (TRANSPARENT)
-  - Sets default text alignment
+  - `param1`: Font path (optional, can be 0)
+  - `param2`: Palette configuration (optional, can be 0)
+  - `param3`: Additional config (optional)
+  - `param4`: Callback/error handler
+- **Returns**: 1 on success, negative error code on failure
 
-### MF_EndPainting
+### TCL_LibClose
+
 ```c
-int MF_EndPainting(HDC hdc);
+int TCL_LibClose(void);
 ```
-- **Address**: 0x100012f0
-- **Purpose**: Finalize painting context and restore GDI state
+
+- **Address**: 0x10034150
+- **Purpose**: Close the TCL library and free resources
+- **Returns**: Success code
+
+## File Operations
+
+### TCL_Open
+
+```c
+int TCL_Open(uint* fileHandle, uint pictIndex, char* pictName, undefined4** pictHandle);
+```
+
+- **Address**: 0x10034270
+- **Purpose**: Open a TCL file and optionally select a picture by index or name
 - **Parameters**:
-  - `hdc`: Windows device context handle
-- **Returns**: 1 on success
-- **Side Effects**:
-  - Restores original GDI objects (pen, brush, font, palette)
-  - Restores original GDI settings (ROP2, fill mode, background mode, text align, text color)
-  - Restores clip region
+  - `fileHandle`: Pointer to receive the file handle
+  - `pictIndex`: Picture index (0 to get number of pictures, 1+ to select)
+  - `pictName`: Picture name (can be NULL if using index)
+  - `pictHandle`: Pointer to receive picture handle
+- **Returns**: 1 on success, negative error code on failure
+- **Error Codes**:
+  - -15: Library not initialized
+  - -9: Invalid parameter
+  - -11: Picture not found
 
-## Object Creation Functions
+### TCL_ClosePict
 
-### MF_CreatePen
 ```c
-HPEN MF_CreatePen(int style, int width, COLORREF color);
+int TCL_ClosePict(undefined4 pictHandle);
 ```
-- **Address**: 0x100013f0
-- **Purpose**: Create a pen object
 
-### MF_CreateBrush
+- **Address**: 0x100344f0
+- **Purpose**: Close a picture handle
+
+### TCL_CloseAllPicts
+
 ```c
-HBRUSH MF_CreateBrush(int style, COLORREF color);
+int TCL_CloseAllPicts(void);
 ```
-- **Address**: 0x100014a0
-- **Purpose**: Create a brush object
 
-### MF_CreateFont
+- **Address**: 0x100345b0
+- **Purpose**: Close all open pictures
+
+## Picture Information
+
+### TCL_GetNumPictsInFile
+
 ```c
-HFONT MF_CreateFont(const char* faceName, int height, int style);
+uint TCL_GetNumPictsInFile(int fileHandle, uint* numPicts);
 ```
-- **Address**: 0x10001540
-- **Purpose**: Create a font object
 
-### MF_CreatePalette
+- **Address**: 0x100343f0
+- **Purpose**: Get the number of pictures in a TCL file
+- **Parameters**:
+  - `fileHandle`: File handle from TCL_Open
+  - `numPicts`: Pointer to receive the count
+- **Returns**: 1 on success, negative error code on failure
+
+### TCL_GetPictName
+
 ```c
-HPALETTE MF_CreatePalette(PALETTEENTRY* entries, int count);
+int TCL_GetPictName(int pictHandle, char* buffer, int bufferSize);
 ```
-- **Address**: 0x10001680
-- **Purpose**: Create a palette object
 
-### MF_DeleteHandle
+- **Address**: 0x10034c50
+- **Purpose**: Get the name of a picture
+
+### TCL_GetPictNamesInFile
+
 ```c
-void MF_DeleteHandle(HGDIOBJ handle);
+int TCL_GetPictNamesInFile(int fileHandle, char** names, int* count);
 ```
-- **Address**: 0x10001900
-- **Purpose**: Delete a GDI object
 
-## Object Selection Functions
+- **Address**: 0x10034450
+- **Purpose**: Get all picture names in a file
 
-### MF_SetPen
+### TCL_GetPictRect
+
 ```c
-void MF_SetPen(HDC hdc, HPEN pen);
+int TCL_GetPictRect(int pictHandle, RECT* rect);
 ```
-- **Address**: 0x10001930
 
-### MF_SetBrush
+- **Address**: 0x10034b90
+- **Purpose**: Get the bounding rectangle of a picture
+
+### TCL_GetVisibleRect
+
 ```c
-void MF_SetBrush(HDC hdc, HBRUSH brush);
+int TCL_GetVisibleRect(int pictHandle, RECT* rect);
 ```
-- **Address**: 0x10001990
 
-### MF_SetFont
+- **Address**: 0x10032da0
+- **Purpose**: Get the visible rectangle of a picture
+
+## Display Functions
+
+### TCL_Display
+
 ```c
-void MF_SetFont(HDC hdc, HFONT font);
+int TCL_Display(undefined4 pictHandle, HDC hdc, float scaleX, float scaleY,
+                RECT* srcRect, POINT* offset, ushort flags);
 ```
-- **Address**: 0x100019f0
 
-### MF_SetPalette
+- **Address**: 0x100345e0
+- **Purpose**: Render a picture to a device context
+- **Parameters**:
+  - `pictHandle`: Picture handle from TCL_Open
+  - `hdc`: Windows device context (can be screen, printer, or metafile)
+  - `scaleX`, `scaleY`: Scale factors
+  - `srcRect`: Source rectangle (can be NULL for entire picture)
+  - `offset`: Output offset (can be NULL)
+  - `flags`: Display flags (bitfield)
+    - Bit 0: Show highlights
+    - Bit 1: Show text
+    - Bit 2: Show groups
+    - Bit 3: Additional rendering
+- **Returns**: 1 on success, negative error code on failure
+
+### TCL_DisplayEx
+
 ```c
-void MF_SetPalette(HDC hdc, HPALETTE palette);
+int TCL_DisplayEx(undefined4 pictHandle, HDC hdc, float scale,
+                  RECT* srcRect, POINT* offset, ushort flags);
 ```
-- **Address**: 0x10001a50
 
-## Clipping Functions
+- **Address**: 0x10034870
+- **Purpose**: Extended display function with unified scaling
+- **Note**: Similar to TCL_Display but uses same scale for X and Y
 
-### MF_SetClipRgn
+## Group Operations
+
+### TCL_GetGroupList
+
 ```c
-void MF_SetClipRgn(HDC hdc, HRGN region);
+int TCL_GetGroupList(int pictHandle, int* groupList, int* count);
 ```
-- **Address**: 0x10001ac0
 
-### MF_CreateRectRgn
+- **Address**: 0x10032a10
+- **Purpose**: Get list of groups in a picture
+
+### TCL_ShowGroup
+
 ```c
-HRGN MF_CreateRectRgn(int left, int top, int right, int bottom);
+int TCL_ShowGroup(int pictHandle, int groupId, int show);
 ```
-- **Address**: 0x10001740
 
-### MF_CreatePolygonRgn
+- **Address**: 0x10031f10
+- **Purpose**: Show or hide a group
+
+### TCL_HighlightGroup
+
 ```c
-HRGN MF_CreatePolygonRgn(POINT* points, int count, int mode);
+int TCL_HighlightGroup(int pictHandle, int groupId, int highlight);
 ```
-- **Address**: 0x100017a0
 
-### MF_CreateEllipticRgn
+- **Address**: 0x10032220
+- **Purpose**: Highlight a group
+
+### TCL_GetGroupInfo
+
 ```c
-HRGN MF_CreateEllipticRgn(int left, int top, int right, int bottom);
+int TCL_GetGroupInfo(int pictHandle, int groupId, void* info);
 ```
-- **Address**: 0x10001870
 
-### MF_CombineRgn
+- **Address**: 0x10033a60
+- **Purpose**: Get information about a group
+
+## Geographic Functions
+
+### TCL_IsPictGeoRefd
+
 ```c
-int MF_CombineRgn(HRGN dest, HRGN src1, HRGN src2, int mode);
+int TCL_IsPictGeoRefd(void* pictHandle);
 ```
-- **Address**: 0x10001ba0
 
-### MF_PaintRgn
+- **Address**: 0x1002ef20
+- **Purpose**: Check if picture has geographic reference
+- **Returns**: 1=georeferenced, -21=not georeferenced
+- **Note**: Approach plates (e.g., 109a, 109b suffix) are typically NOT georeferenced
+
+### TCL_GeoLatLon2XY
+
 ```c
-void MF_PaintRgn(HDC hdc, HRGN region);
+int TCL_GeoLatLon2XY(void* pictHandle, double lat, double lon, int* x, int* y);
 ```
-- **Address**: 0x10001ce0
 
-## Drawing Mode Functions
+- **Address**: 0x1002fbe0
+- **Purpose**: Convert latitude/longitude to chart pixel coordinates
+- **Returns**: 1=success, -9=invalid pointers, -21=not georeferenced, -23=out of bounds
+- **Accuracy**: Round-trip error ~1-10 meters
 
-### MF_SetDrawMode
+### TCL_GeoXY2LatLon
+
 ```c
-void MF_SetDrawMode(HDC hdc, int mode);
+int TCL_GeoXY2LatLon(void* pictHandle, int x, int y, double* lat, double* lon);
 ```
-- **Address**: 0x10001d30
 
-### MF_SetPolyFillMode
+- **Address**: 0x10030330
+- **Purpose**: Convert chart pixel coordinates to latitude/longitude
+- **Returns**: 1=success, -9=invalid pointers, -21=not georeferenced, -23=out of bounds
+
+## Palette Functions
+
+### TCL_SetPalette
+
 ```c
-void MF_SetPolyFillMode(HDC hdc, int mode);
+int TCL_SetPalette(int pictHandle, HPALETTE palette);
 ```
-- **Address**: 0x10001d80
 
-### MF_SetTextBkMode
+- **Address**: 0x10035410
+- **Purpose**: Set the color palette
+
+### TCL_GetPaletteHandle
+
 ```c
-void MF_SetTextBkMode(HDC hdc, int mode);
+HPALETTE TCL_GetPaletteHandle(int pictHandle);
 ```
-- **Address**: 0x10001dd0
 
-### MF_SetTextAlignment
+- **Address**: 0x100352b0
+- **Purpose**: Get the current palette handle
+
+### TCL_GetNumColors
+
 ```c
-void MF_SetTextAlignment(HDC hdc, int align);
+int TCL_GetNumColors(int pictHandle);
 ```
-- **Address**: 0x10001e20
 
-### MF_SetTextColor
+- **Address**: 0x10035250
+- **Purpose**: Get the number of colors
+
+## Rotation Functions
+
+### TCL_Rotate
+
 ```c
-void MF_SetTextColor(HDC hdc, COLORREF color);
+int TCL_Rotate(int pictHandle, float angle);
 ```
-- **Address**: 0x10001e70
 
-## Drawing Primitives
+- **Address**: 0x10034f10
+- **Purpose**: Rotate the picture
 
-### MF_MoveTo
+### TCL_RotateLeftRight
+
 ```c
-void MF_MoveTo(HDC hdc, int x, int y);
+int TCL_RotateLeftRight(int pictHandle, int mirror);
 ```
-- **Address**: 0x10001fe0
 
-### MF_LineTo
-```c
-void MF_LineTo(HDC hdc, int x, int y);
-```
-- **Address**: 0x10002020
-
-### MF_DrawArc
-```c
-void MF_DrawArc(HDC hdc, int left, int top, int right, int bottom, 
-                int startAngle, int endAngle);
-```
-- **Address**: 0x10002060
-
-### MF_DrawEllipse
-```c
-void MF_DrawEllipse(HDC hdc, int left, int top, int right, int bottom);
-```
-- **Address**: 0x100023a0
-
-### MF_DrawChord
-```c
-void MF_DrawChord(HDC hdc, int left, int top, int right, int bottom,
-                  int startAngle, int endAngle);
-```
-- **Address**: 0x10002440
-
-### MF_DrawPolygon
-```c
-void MF_DrawPolygon(HDC hdc, POINT* points, int count);
-```
-- **Address**: 0x100024a0
-
-### MF_DrawPie
-```c
-void MF_DrawPie(HDC hdc, int left, int top, int right, int bottom,
-                int startAngle, int endAngle);
-```
-- **Address**: 0x10002520
-
-## Text Functions
-
-### MF_DrawText
-```c
-void MF_DrawText(HDC hdc, const char* text, int x, int y);
-```
-- **Address**: 0x10001fa0
-
-### MF_BeginTextExtentsCalc
-```c
-void MF_BeginTextExtentsCalc(HDC hdc);
-```
-- **Address**: 0x10001ec0
-
-### MF_EndTextExtentsCalc
-```c
-void MF_EndTextExtentsCalc(HDC hdc);
-```
-- **Address**: 0x10001ef0
-
-### MF_TextExtentsCalc
-```c
-void MF_TextExtentsCalc(HDC hdc, const char* text, int* width, int* height);
-```
-- **Address**: 0x10004380
-
-### MF_GetTextExtents
-```c
-void MF_GetTextExtents(HDC hdc, const char* text, SIZE* size);
-```
-- **Address**: 0x10004690
-
-## Raster/Image Functions
-
-### MF_LoadRaster
-```c
-int MF_LoadRaster(const char* filename, void** raster);
-```
-- **Address**: 0x10002df0
-- **Purpose**: Load a raster image
-
-### MF_DeleteRaster
-```c
-void MF_DeleteRaster(void* raster);
-```
-- **Address**: 0x10002640
-
-### MF_BeginPaintingRaster
-```c
-void MF_BeginPaintingRaster(HDC hdc, void* raster);
-```
-- **Address**: 0x10002690
-
-### MF_PaintRaster
-```c
-void MF_PaintRaster(HDC hdc, void* raster, int x, int y, int width, int height);
-```
-- **Address**: 0x10002700
-
-### MF_EndPaintingRaster
-```c
-void MF_EndPaintingRaster(HDC hdc, void* raster);
-```
-- **Address**: 0x10002a00
-
-### MF_CreateCompatibleRaster
-```c
-void* MF_CreateCompatibleRaster(HDC hdc, int width, int height);
-```
-- **Address**: 0x100032f0
-
-## File I/O Functions
-
-### MF_OpenFile
-```c
-int MF_OpenFile(const char* filename, int* handle);
-```
-- **Address**: 0x10002a80
-
-### MF_CloseFile
-```c
-void MF_CloseFile(int handle);
-```
-- **Address**: 0x10002b90
-
-### MF_Read
-```c
-int MF_Read(int handle, void* buffer, int size);
-```
-- **Address**: 0x10002b40
-
-### MF_GetFileSize
-```c
-int MF_GetFileSize(int handle);
-```
-- **Address**: 0x10002ad0
-
-### MF_SetFilePosition
-```c
-void MF_SetFilePosition(int handle, int position);
-```
-- **Address**: 0x10002b10
+- **Address**: 0x10034d50
+- **Purpose**: Mirror the picture left-right
 
 ## Utility Functions
 
-### MF_DecompressData
-```c
-int MF_DecompressData(void* src, void* dst, int srcSize, int* dstSize);
-```
-- **Address**: 0x10002c90
-- **Purpose**: Decompress data (likely used for compressed chart data)
-
-### MF_GetFilePathLength
-```c
-int MF_GetFilePathLength(int handle);
-```
-- **Address**: 0x10002be0
-
-### MF_GetNearestPaletteIndex
-```c
-int MF_GetNearestPaletteIndex(HPALETTE palette, COLORREF color);
-```
-- **Address**: 0x10001f40
-
-## Usage Pattern
-
-Typical usage for rendering to a printer:
+### TCL_GetVersion
 
 ```c
-// Initialize
-MF_LibOpen();
-MF_BeginPainting(printerDC);
-
-// Create objects
-HPEN pen = MF_CreatePen(PS_SOLID, 1, RGB(0,0,0));
-HBRUSH brush = MF_CreateBrush(BS_SOLID, RGB(255,255,255));
-HFONT font = MF_CreateFont("Arial", 12, 0);
-
-// Set objects
-MF_SetPen(printerDC, pen);
-MF_SetBrush(printerDC, brush);
-MF_SetFont(printerDC, font);
-
-// Drawing operations
-MF_MoveTo(printerDC, 100, 100);
-MF_LineTo(printerDC, 200, 200);
-MF_DrawText(printerDC, "Hello", 100, 100);
-
-// Cleanup
-MF_DeleteHandle(pen);
-MF_DeleteHandle(brush);
-MF_DeleteHandle(font);
-MF_EndPainting(printerDC);
-MF_LibClose();
+int TCL_GetVersion(void);
 ```
+
+- **Address**: 0x10034230
+- **Purpose**: Get library version
+
+### TCL_MovePict
+
+```c
+int TCL_MovePict(int pictHandle, int dx, int dy);
+```
+
+- **Address**: 0x10035150
+- **Purpose**: Move picture origin
+
+## File Format Notes
+
+Based on reverse engineering, TCL files have the following structure:
+
+1. **Header**: Magic bytes "OX" followed by version and flags
+2. **Checksum**: CRC or similar checksum for data integrity
+3. **Picture Directory**: List of picture names and offsets
+4. **Picture Data**: Compressed or uncompressed chart data
+
+The file format appears to be designed for aviation terminal charts.
