@@ -361,7 +361,352 @@ func (h *Handler) GetChartData(c *gin.Context) {
 // @Router /health [get]
 func (h *Handler) GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"version": "1.3.0",
+		"status":     "ok",
+		"version":    "2.2.0",
+		"dll_loaded": mrvtcl.IsLoaded(),
+		"dll_init":   mrvtcl.IsInitialized(),
 	})
+}
+
+// ChartDataResponse is the API response for getting chart data
+type ChartDataResponse struct {
+	Filename string               `json:"filename"`
+	ICAO     string               `json:"icao"`
+	Width    int32                `json:"width"`
+	Height   int32                `json:"height"`
+	HasTCL   bool                 `json:"has_tcl"`
+	GeoRef   *mrvtcl.GeoRefStatus `json:"georef,omitempty"`
+}
+
+// GetChartData returns data for a single chart
+// @Summary Get chart data
+// @Description Returns chart data including dimensions and georeferencing status for a specific chart
+// @Tags charts
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename (e.g., KJFK225)"
+// @Success 200 {object} ChartDataResponse
+// @Router /api/v1/charts/{icao}/data/{filename} [get]
+func (h *Handler) GetChartData(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	response := ChartDataResponse{
+		Filename: chart.Filename,
+		ICAO:     chart.ICAO,
+		Width:    0,
+		Height:   0,
+		HasTCL:   chart.TCLPath != "",
+	}
+
+	if chart.TCLPath != "" && mrvtcl.IsInitialized() {
+		tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+		if err == nil {
+			defer tclChart.Close()
+			response.Width = tclChart.Width()
+			response.Height = tclChart.Height()
+
+			status, err := tclChart.GetGeoRefStatus()
+			if err == nil {
+				response.GeoRef = status
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get chart georeferencing status
+// @Description Returns whether a chart is georeferenced and its pixel bounds
+// @Tags georef
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename (e.g., KJFK225)"
+// @Success 200 {object} mrvtcl.GeoRefStatus
+// @Router /api/v1/charts/{icao}/geo/status/{filename} [get]
+func (h *Handler) GetChartGeoStatus(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	if chart.TCLPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "TCL file not found"})
+		return
+	}
+
+	if !mrvtcl.IsInitialized() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "georeferencing not available (32-bit Windows required)"})
+		return
+	}
+
+	tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open chart: %v", err)})
+		return
+	}
+	defer tclChart.Close()
+
+	status, err := tclChart.GetGeoRefStatus()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
+}
+
+// PixelToCoord converts chart pixel coordinates to lat/lon
+// @Summary Convert pixel to coordinates
+// @Description Converts chart pixel coordinates (x, y) to geographic coordinates (lat, lon)
+// @Tags georef
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename"
+// @Param request body mrvtcl.PixelToCoordRequest true "Pixel coordinates"
+// @Success 200 {object} mrvtcl.PixelToCoordResponse
+// @Router /api/v1/charts/{icao}/geo/pixel2coord/{filename} [post]
+func (h *Handler) PixelToCoord(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	if chart.TCLPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "TCL file not found"})
+		return
+	}
+
+	if !mrvtcl.IsInitialized() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "georeferencing not available (32-bit Windows required)"})
+		return
+	}
+
+	var req mrvtcl.PixelToCoordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open chart: %v", err)})
+		return
+	}
+	defer tclChart.Close()
+
+	lat, lon, err := tclChart.PixelToCoord(req.X, req.Y)
+	c.JSON(http.StatusOK, mrvtcl.PixelToCoordResponse{
+		Latitude:  lat,
+		Longitude: lon,
+		Error:     errToStr(err),
+	})
+}
+
+// CoordToPixel converts lat/lon to chart pixel coordinates
+// @Summary Convert coordinates to pixel
+// @Description Converts geographic coordinates (lat, lon) to chart pixel coordinates (x, y)
+// @Tags georef
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename"
+// @Param request body mrvtcl.CoordToPixelRequest true "Geographic coordinates"
+// @Success 200 {object} mrvtcl.CoordToPixelResponse
+// @Router /api/v1/charts/{icao}/geo/coord2pixel/{filename} [post]
+func (h *Handler) CoordToPixel(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	if chart.TCLPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "TCL file not found"})
+		return
+	}
+
+	if !mrvtcl.IsInitialized() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "georeferencing not available (32-bit Windows required)"})
+		return
+	}
+
+	var req mrvtcl.CoordToPixelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open chart: %v", err)})
+		return
+	}
+	defer tclChart.Close()
+
+	x, y, err := tclChart.CoordToPixel(req.Latitude, req.Longitude)
+	c.JSON(http.StatusOK, mrvtcl.CoordToPixelResponse{
+		X:     x,
+		Y:     y,
+		Error: errToStr(err),
+	})
+}
+
+// BatchPixelToCoord batch converts pixels to coordinates
+// @Summary Batch convert pixels to coordinates
+// @Description Converts multiple pixel coordinates to geographic coordinates
+// @Tags georef
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename"
+// @Param request body mrvtcl.BatchPixelToCoordRequest true "Pixel coordinates"
+// @Success 200 {object} mrvtcl.BatchPixelToCoordResponse
+// @Router /api/v1/charts/{icao}/geo/batch-pixel2coord/{filename} [post]
+func (h *Handler) BatchPixelToCoord(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	if chart.TCLPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "TCL file not found"})
+		return
+	}
+
+	if !mrvtcl.IsInitialized() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "georeferencing not available (32-bit Windows required)"})
+		return
+	}
+
+	var req mrvtcl.BatchPixelToCoordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open chart: %v", err)})
+		return
+	}
+	defer tclChart.Close()
+
+	geoPoints, errs := tclChart.BatchPixelToCoord(convertPixelToCoordToPixelPoints(req.Points))
+
+	responses := make([]mrvtcl.PixelToCoordResponse, len(req.Points))
+	for i := range req.Points {
+		responses[i] = mrvtcl.PixelToCoordResponse{
+			Latitude:  geoPoints[i].Latitude,
+			Longitude: geoPoints[i].Longitude,
+			Error:     errToStr(errs[i]),
+		}
+	}
+
+	c.JSON(http.StatusOK, mrvtcl.BatchPixelToCoordResponse{Points: responses})
+}
+
+// BatchCoordToPixel batch converts coordinates to pixels
+// @Summary Batch convert coordinates to pixels
+// @Description Converts multiple geographic coordinates to pixel coordinates
+// @Tags georef
+// @Accept json
+// @Produce json
+// @Param icao path string true "ICAO airport code"
+// @Param filename path string true "Chart filename"
+// @Param request body mrvtcl.BatchCoordToPixelRequest true "Geographic coordinates"
+// @Success 200 {object} mrvtcl.BatchCoordToPixelResponse
+// @Router /api/v1/charts/{icao}/geo/batch-coord2pixel/{filename} [post]
+func (h *Handler) BatchCoordToPixel(c *gin.Context) {
+	icao := c.Param("icao")
+	filename := c.Param("filename")
+
+	chart := h.catalog.GetChart(filename)
+	if chart == nil || chart.ICAO != icao {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chart not found"})
+		return
+	}
+
+	if chart.TCLPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "TCL file not found"})
+		return
+	}
+
+	if !mrvtcl.IsInitialized() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "georeferencing not available (32-bit Windows required)"})
+		return
+	}
+
+	var req mrvtcl.BatchCoordToPixelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	tclChart, err := mrvtcl.OpenChart(chart.TCLPath, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open chart: %v", err)})
+		return
+	}
+	defer tclChart.Close()
+
+	pixelPoints, errs := tclChart.BatchCoordToPixel(convertCoordToPixelToGeoPoints(req.Points))
+
+	responses := make([]mrvtcl.CoordToPixelResponse, len(req.Points))
+	for i := range req.Points {
+		responses[i] = mrvtcl.CoordToPixelResponse{
+			X:     pixelPoints[i].X,
+			Y:     pixelPoints[i].Y,
+			Error: errToStr(errs[i]),
+		}
+	}
+
+	c.JSON(http.StatusOK, mrvtcl.BatchCoordToPixelResponse{Points: responses})
+}
+
+func errToStr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func convertPixelToCoordToPixelPoints(points []mrvtcl.PixelToCoordRequest) []mrvtcl.PixelPoint {
+	result := make([]mrvtcl.PixelPoint, len(points))
+	for i, p := range points {
+		result[i] = mrvtcl.PixelPoint{X: p.X, Y: p.Y}
+	}
+	return result
+}
+
+func convertCoordToPixelToGeoPoints(points []mrvtcl.CoordToPixelRequest) []mrvtcl.GeoPoint {
+	result := make([]mrvtcl.GeoPoint, len(points))
+	for i, p := range points {
+		result[i] = mrvtcl.GeoPoint{Latitude: p.Latitude, Longitude: p.Longitude}
+	}
+	return result
 }

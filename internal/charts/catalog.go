@@ -37,6 +37,10 @@ func NewCatalog(dbf *dbf.DBF, tclDir string) *Catalog {
 	}
 }
 
+func (c *Catalog) Preload() {
+	c.buildCache()
+}
+
 func (c *Catalog) buildCache() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
